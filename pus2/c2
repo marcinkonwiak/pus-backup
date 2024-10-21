@@ -1,0 +1,3 @@
+gcc client2.c -o client2
+
+./client2

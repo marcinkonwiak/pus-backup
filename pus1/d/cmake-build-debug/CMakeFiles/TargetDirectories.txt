@@ -1,0 +1,3 @@
+/home/admin/Code/studia/pus/d/cmake-build-debug/CMakeFiles/d.dir
+/home/admin/Code/studia/pus/d/cmake-build-debug/CMakeFiles/edit_cache.dir
+/home/admin/Code/studia/pus/d/cmake-build-debug/CMakeFiles/rebuild_cache.dir
