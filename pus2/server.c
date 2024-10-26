@@ -3,11 +3,14 @@
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <signal.h>
 
 #define PORT 8080
 #define BUFFER_SIZE 1024
 
-float perform_operation(float num1, char operator, float num2) {
+int server_fd; // Moved out to be accessible in signal handler
+
+float perform_operation(const float num1, const char operator, const float num2) {
     switch (operator) {
         case '+': return num1 + num2;
         case '-': return num1 - num2;
@@ -17,11 +20,21 @@ float perform_operation(float num1, char operator, float num2) {
     }
 }
 
+// Signal handler for SIGINT
+void handle_sigint(int sig) {
+    printf("\nCaught signal %d, shutting down gracefully...\n", sig);
+    close(server_fd);  // Close the server socket
+    exit(0);           // Exit the program
+}
+
 int main() {
-    int server_fd, new_socket;
+    int new_socket;
     struct sockaddr_in address;
     int addrlen = sizeof(address);
     char buffer[BUFFER_SIZE] = {0};
+
+    // Set up SIGINT signal handler
+    signal(SIGINT, handle_sigint);
 
     // Creating socket file descriptor
     if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
@@ -49,30 +62,36 @@ int main() {
     printf("Server listening on port %d...\n", PORT);
 
     while (1) {
-        // Accept incoming connection
         if ((new_socket = accept(server_fd, (struct sockaddr*)&address, (socklen_t*)&addrlen)) < 0) {
             perror("Accept failed");
             exit(EXIT_FAILURE);
         }
 
-        // Read incoming message
-        read(new_socket, buffer, BUFFER_SIZE);
+        // Loop to handle multiple requests from the same client
+        while (1) {
+            memset(buffer, 0, sizeof(buffer));
+            int valread = read(new_socket, buffer, BUFFER_SIZE);
+            if (valread <= 0) {
+                // Client disconnected or error occurred
+                printf("Client disconnected\n");
+                break;
+            }
 
-        float num1, num2;
-        char operator;
-        sscanf(buffer, "%f %c %f", &num1, &operator, &num2);
+            // Process the request
+            float num1, num2;
+            char operator;
+            sscanf(buffer, "%f %c %f", &num1, &operator, &num2);
+            float result = perform_operation(num1, operator, num2);
 
-        // Perform the calculation
-        float result = perform_operation(num1, operator, num2);
+            // Send the result back
+            snprintf(buffer, BUFFER_SIZE, "%f", result);
+            send(new_socket, buffer, strlen(buffer), 0);
 
-        // Send result back to client
-        snprintf(buffer, BUFFER_SIZE, "%f", result);
-        send(new_socket, buffer, strlen(buffer), 0);
+            printf("%f %c %f = %f\n", num1, operator, num2, result);
+        }
 
-        // print whole operation
-        printf("%f %c %f = %f\n", num1, operator, num2, result);
-
-        // Close the socket
+        // Close the connection after client disconnects
         close(new_socket);
     }
+
 }
