@@ -76,7 +76,11 @@ int main() {
         perror("Socket failed");
         exit(EXIT_FAILURE);
     }
-
+    int opt = 1;
+    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt))) {
+        perror("setsockopt");
+        exit(EXIT_FAILURE);
+    }
     if (bind(server_fd, (struct sockaddr *) &address, sizeof(address)) < 0) {
         perror("Bind failed");
         exit(EXIT_FAILURE);
@@ -86,6 +90,7 @@ int main() {
         perror("Listen failed");
         exit(EXIT_FAILURE);
     }
+
     int maxfd = server_fd;
     int maxi = -1;
     for (int i = 0; i < FD_SETSIZE; i++) {
