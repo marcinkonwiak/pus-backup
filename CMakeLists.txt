@@ -12,6 +12,10 @@ add_executable(pus_backup
     cw_03_cw/s.c
     cw_04/k.c
     cw_04/s.c
+    cw_04_cw/k.c
+    cw_04_cw/s.c
+    cw_05/k.c
+    cw_05/s.c
     pus1/a/p.c
     pus1/b/p.c
     pus1/c/p.c
