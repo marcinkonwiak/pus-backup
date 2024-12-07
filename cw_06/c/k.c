@@ -92,7 +92,7 @@ int main() {
         printf("Second number");
         float num2 = get_float_input();
 
-        snprintf(message, sizeof(message), "%f %c %f", num1, operator, num2);
+        snprintf(message, sizeof(message), "%f %c %f\n", num1, operator, num2);
         send(sock, message, strlen(message), 0);
 
         memset(buffer, 0, sizeof(buffer));
