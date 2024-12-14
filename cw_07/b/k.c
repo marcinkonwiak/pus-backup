@@ -5,6 +5,7 @@
 #include <arpa/inet.h>
 #include <signal.h>
 #include <errno.h>
+#include <sys/select.h>
 
 #define PORT 8080
 #define BUFFER_SIZE 1024
@@ -25,43 +26,14 @@ void handle_exit(int sig) {
     exit(0);
 }
 
-float get_float_input() {
-    char input[100];
-    float value;
-    char *endptr;
-
-    while (1) {
-        if (fgets(input, sizeof(input), stdin) != NULL) {
-            errno = 0;
-            value = strtof(input, &endptr);
-
-            if (errno == 0 && endptr != input && *endptr == '\n') {
-                return value;
-            } else {
-                printf("Invalid input:\n");
-            }
-        } else {
-            printf("Error reading input.\n");
-        }
-    }
-}
-
-char get_operator_input() {
-    char input[100];
-    while (1) {
-        if (fgets(input, sizeof(input), stdin) != NULL && strlen(input) == 2 &&
-            (input[0] == '+' || input[0] == '-' || input[0] == '*' || input[0] ==
-             '/')) {
-            return input[0];
-        }
-        printf("Invalid operator\n");
-    }
-}
-
 int main() {
     struct sockaddr_in server_address;
     char buffer[BUFFER_SIZE] = {0};
     char message[100];
+    fd_set readfds;
+    int maxfd;
+    int prompt_printed = 0;
+    int stdineof = 0;
 
     signal(SIGINT, handle_exit);
 
@@ -78,25 +50,78 @@ int main() {
         return -1;
     }
 
-    if (connect(sock, (struct sockaddr *) &server_address,
-                sizeof(server_address)) < 0) {
+    if (connect(sock, (struct sockaddr *)&server_address, sizeof(server_address)) < 0) {
         printf("\nConnection Failed\n");
         return -1;
     }
 
     while (1) {
-        printf("First number: ");
-        float num1 = get_float_input();
-        printf("Enter operator (+, -, *, /): ");
-        char operator = get_operator_input();
-        printf("Second number");
-        float num2 = get_float_input();
+        if (!prompt_printed) {
+            printf("Enter expression (e.g. 1 + 1): ");
+            fflush(stdout);
+            prompt_printed = 1;
+        }
 
-        snprintf(message, sizeof(message), "%f %c %f", num1, operator, num2);
-        send(sock, message, strlen(message), 0);
+        FD_ZERO(&readfds);
+        if (stdineof == 0) {
+            FD_SET(0, &readfds);
+        }
+        FD_SET(sock, &readfds);
 
-        memset(buffer, 0, sizeof(buffer));
-        read(sock, buffer, BUFFER_SIZE);
-        printf("Result: %s\n", buffer);
+        maxfd = sock > 0 ? sock : 0;
+
+        int activity = select(maxfd + 1, &readfds, NULL, NULL, NULL);
+
+        if (activity < 0 && errno != EINTR) {
+            printf("Select error\n");
+            break;
+        }
+
+        if (FD_ISSET(0, &readfds)) {
+            char input[256];
+            if (fgets(input, sizeof(input), stdin) != NULL) {
+                prompt_printed = 0;
+                size_t len = strlen(input);
+                if (len > 0 && input[len - 1] == '\n') {
+                    input[len - 1] = '\0';
+                }
+
+                float num1, num2;
+                char operator;
+                int i = sscanf(input, "%f %c %f", &num1, &operator, &num2);
+                if (i == 3) {
+                    snprintf(message, sizeof(message), "%f %c %f", num1, operator, num2);
+                    send(sock, message, strlen(message), 0);
+                } else if (i == -1) {
+                    stdineof = 1;
+                    shutdown(sock, SHUT_WR);
+                    FD_CLR(0, &readfds);
+                    continue;
+                }
+                else {
+                    printf("Invalid input\n");
+                    continue;
+                }
+            }
+        }
+
+        if (FD_ISSET(sock, &readfds)) {
+            memset(buffer, 0, sizeof(buffer));
+            int valread = read(sock, buffer, BUFFER_SIZE);
+            if (valread > 0) {
+                printf("\033[2K\n");
+                printf("Result: %s\n", buffer);
+                prompt_printed = 0;
+            } else if (valread == 0) {
+                printf("Server closed connection\n");
+                break;
+            } else {
+                perror("Read error");
+                break;
+            }
+        }
     }
+
+    close(sock);
+    return 0;
 }

@@ -8,8 +8,48 @@
 
 #define PORT 8080
 #define BUFFER_SIZE 1024
+#define MAX_IPS 100
 
 int server_fd;
+char *allowed_ips[MAX_IPS + 1]; // List of allowed IPs
+int allowed_ip_count = 0;
+
+int load_allowed_ips(const char *filename) {
+    FILE *fp = fopen(filename, "r");
+    if (!fp) {
+        perror("fopen");
+        return -1;
+    }
+
+    char line[256];
+    while (fgets(line, sizeof(line), fp) && allowed_ip_count < MAX_IPS) {
+        line[strcspn(line, "\n")] = '\0';
+        if (line[0] == '\0') {
+            continue;
+        }
+
+        allowed_ips[allowed_ip_count] = strdup(line);
+        if (!allowed_ips[allowed_ip_count]) {
+            perror("strdup");
+            fclose(fp);
+            return -1;
+        }
+        allowed_ip_count++;
+    }
+
+    allowed_ips[allowed_ip_count] = NULL;
+    fclose(fp);
+    return 0;
+}
+
+int is_ip_allowed(const char *ip) {
+    for (int i = 0; i < allowed_ip_count; i++) {
+        if (strcmp(ip, allowed_ips[i]) == 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
 
 float calculate(const float num1, const char operator, const float num2) {
     switch (operator) {
@@ -45,6 +85,11 @@ void handle_client(int conn_fd) {
 void handle_sigint(int sig) {
     printf("\nClosing server\n");
     close(server_fd);
+
+    for (int i = 0; i < allowed_ip_count; i++) {
+        free(allowed_ips[i]);
+    }
+
     exit(0);
 }
 
@@ -65,9 +110,19 @@ int main() {
     char buffer[BUFFER_SIZE] = {0};
     int conn_fd;
 
+    if (load_allowed_ips("ip.txt") < 0) {
+        fprintf(stderr, "Failed to load allowed IP addresses\n");
+        exit(EXIT_FAILURE);
+    }
+
     signal(SIGINT, handle_sigint);
     if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
         perror("Socket failed");
+        exit(EXIT_FAILURE);
+    }
+    int opt = 1;
+    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt))) {
+        perror("setsockopt");
         exit(EXIT_FAILURE);
     }
 
@@ -91,6 +146,17 @@ int main() {
             perror("Accept failed");
             exit(EXIT_FAILURE);
         }
+
+        char client_ip[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &address.sin_addr, client_ip, sizeof(client_ip));
+
+        if (!is_ip_allowed(client_ip)) {
+            printf("Connection from unauthorized IP %s rejected\n", client_ip);
+            close(conn_fd);
+            continue;
+        }
+
+        printf("Connection accepted from %s\n", client_ip);
 
         if (fork() == 0) {
             close(server_fd);
