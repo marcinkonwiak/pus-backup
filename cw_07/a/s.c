@@ -7,8 +7,11 @@
 
 #define PORT 8080
 #define BUFFER_SIZE 1024
+#define MAX_IPS 100
 
 int server_fd;
+char *allowed_ips[MAX_IPS + 1]; // null-terminated list
+int allowed_ip_count = 0;
 
 float calculate(const float num1, const char operator, const float num2) {
     switch (operator) {
@@ -18,6 +21,48 @@ float calculate(const float num1, const char operator, const float num2) {
         case '/': return (num2 != 0) ? num1 / num2 : 0;
         default: return 0;
     }
+}
+
+int load_ips_from_file(const char *filename) {
+    FILE *fp = fopen(filename, "r");
+    if (!fp) {
+        perror("fopen");
+        return -1;
+    }
+
+    char line[256];
+    while (fgets(line, sizeof(line), fp) && allowed_ip_count < MAX_IPS) {
+        // Remove trailing newline
+        line[strcspn(line, "\n")] = '\0';
+
+        // Skip empty lines
+        if (line[0] == '\0') {
+            continue;
+        }
+
+        // Duplicate the line and store it
+        allowed_ips[allowed_ip_count] = strdup(line);
+        if (!allowed_ips[allowed_ip_count]) {
+            perror("strdup");
+            fclose(fp);
+            return -1;
+        }
+        allowed_ip_count++;
+    }
+
+    allowed_ips[allowed_ip_count] = NULL;
+    fclose(fp);
+    return 0;
+}
+
+// Function to check if a given IP address is in the allowed list
+int is_ip_allowed(const char *ip) {
+    for (int i = 0; allowed_ips[i] != NULL; i++) {
+        if (strcmp(ip, allowed_ips[i]) == 0) {
+            return 1; // allowed
+        }
+    }
+    return 0; // not allowed
 }
 
 void handle_sigint(int sig) {
@@ -32,6 +77,13 @@ int main() {
     char buffer[BUFFER_SIZE] = {0};
 
     signal(SIGINT, handle_sigint);
+
+    // Load allowed IPs from file
+    // Change "allowed_ips.txt" to the path of your file
+    if (load_ips_from_file("ip.txt") < 0) {
+        fprintf(stderr, "Failed to load IP addresses from file.\n");
+        exit(EXIT_FAILURE);
+    }
 
     if ((server_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
         perror("Socket creation failed");
@@ -64,6 +116,12 @@ int main() {
         int n = recvfrom(server_fd, buffer, BUFFER_SIZE, 0, (struct sockaddr *)&cliaddr, &clilen);
         if (n < 0) {
             perror("recvfrom failed");
+            continue;
+        }
+        const char *client_ip = inet_ntoa(cliaddr.sin_addr);
+
+        if (!is_ip_allowed(client_ip)) {
+            printf("Received message from disallowed IP: %s\n", client_ip);
             continue;
         }
 
