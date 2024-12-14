@@ -50,15 +50,23 @@ int main() {
         return -1;
     }
 
+    // Enable broadcast if the OS allows it on raw sockets
+    // int broadcastPermission = 1;
+    // if (setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &broadcastPermission, sizeof(broadcastPermission)) < 0) {
+    //     perror("setsockopt(SO_BROADCAST) failed");
+    //     close(sock);
+    //     return -1;
+    // }
+
     struct sockaddr_in server_address;
     memset(&server_address, 0, sizeof(server_address));
     server_address.sin_family = AF_INET;
     server_address.sin_port = htons(PORT);
 
-    if (inet_pton(AF_INET, "127.0.0.1", &server_address.sin_addr) <= 0) {
-        printf("\nInvalid server address\n");
-        return -1;
-    }
+    // if (inet_pton(AF_INET, "127.0.0.1", &server_address.sin_addr) <= 0) {
+    //     printf("\nInvalid server address\n");
+    //     return -1;
+    // }
 
     while (1) {
         printf("Enter expression (e.g. 1 + 1): ");
@@ -90,7 +98,7 @@ int main() {
             }
 
             // Destination IP
-            ip_header->ip_dst = server_address.sin_addr;
+            // ip_header->ip_dst = server_address.sin_addr;
 
             // Calculate IP checksum
             ip_header->ip_sum = 0;

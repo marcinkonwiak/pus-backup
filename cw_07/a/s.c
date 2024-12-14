@@ -119,6 +119,7 @@ int main() {
             continue;
         }
         const char *client_ip = inet_ntoa(cliaddr.sin_addr);
+        printf("Client IP: %s\n", client_ip);
 
         if (!is_ip_allowed(client_ip)) {
             printf("Received message from disallowed IP: %s\n", client_ip);
