@@ -100,10 +100,10 @@ int main() {
     memset(&server_address, 0, sizeof(server_address));
     server_address.sin_family = AF_INET;
     server_address.sin_port = htons(PORT);
-    // if (inet_pton(AF_INET, "127.0.0.1", &server_address.sin_addr) <= 0) {
-    //     printf("\nInvalid server address\n");
-    //     return -1;
-    // }
+    if (inet_pton(AF_INET, "127.0.255.255", &server_address.sin_addr) <= 0) {
+        printf("\nInvalid server address\n");
+        return -1;
+    }
 
     while (1) {
         printf("Enter expression (e.g. 1 + 1): ");

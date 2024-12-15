@@ -84,16 +84,24 @@ int main() {
         exit(EXIT_FAILURE);
     }
 
+    // Enable broadcast option
+    int broadcast = 1;
+    if (setsockopt(server_fd, SOL_SOCKET, SO_BROADCAST, &broadcast, sizeof(broadcast)) < 0) {
+        perror("setsockopt SO_BROADCAST failed");
+        close(server_fd);
+        exit(EXIT_FAILURE);
+    }
+
     int opt = 1;
     if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
-        perror("setsockopt failed");
+        perror("setsockopt SO_REUSEADDR failed");
         close(server_fd);
         exit(EXIT_FAILURE);
     }
 
     memset(&address, 0, sizeof(address));
     address.sin_family = AF_INET;
-    address.sin_addr.s_addr = INADDR_ANY;
+    address.sin_addr.s_addr = INADDR_ANY; // Bind to all available interfaces
     address.sin_port = htons(PORT);
 
     if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {

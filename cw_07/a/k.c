@@ -58,10 +58,10 @@ int main() {
     server_address.sin_family = AF_INET;
     server_address.sin_port = htons(PORT);
 
-    // if (inet_pton(AF_INET, "127.0.0.1", &server_address.sin_addr) <= 0) {
-    //     printf("\nInvalid server address\n");
-    //     return -1;
-    // }
+    if (inet_pton(AF_INET, "127.0.255.255", &server_address.sin_addr) <= 0) {
+        printf("\nInvalid server address\n");
+        return -1;
+    }
 
     while (1) {
         printf("Enter expression (e.g. 1 + 1): ");
@@ -92,7 +92,7 @@ int main() {
             }
 
             // Server IP
-            // ip_header->ip_dst = server_address.sin_addr;
+            ip_header->ip_dst = server_address.sin_addr;
 
             ip_header->ip_sum = 0;
             ip_header->ip_sum = csum((unsigned short *)packet, sizeof(struct ip) / 2);
