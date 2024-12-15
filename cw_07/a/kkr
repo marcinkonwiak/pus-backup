@@ -1,0 +1,3 @@
+gcc k_r.c -o k_r
+
+./k_r

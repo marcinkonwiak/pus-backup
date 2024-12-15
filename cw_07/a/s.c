@@ -10,7 +10,7 @@
 #define MAX_IPS 100
 
 int server_fd;
-char *allowed_ips[MAX_IPS + 1]; // null-terminated list
+char *allowed_ips[MAX_IPS + 1];
 int allowed_ip_count = 0;
 
 float calculate(const float num1, const char operator, const float num2) {
@@ -32,15 +32,12 @@ int load_ips_from_file(const char *filename) {
 
     char line[256];
     while (fgets(line, sizeof(line), fp) && allowed_ip_count < MAX_IPS) {
-        // Remove trailing newline
         line[strcspn(line, "\n")] = '\0';
 
-        // Skip empty lines
         if (line[0] == '\0') {
             continue;
         }
 
-        // Duplicate the line and store it
         allowed_ips[allowed_ip_count] = strdup(line);
         if (!allowed_ips[allowed_ip_count]) {
             perror("strdup");
@@ -55,14 +52,13 @@ int load_ips_from_file(const char *filename) {
     return 0;
 }
 
-// Function to check if a given IP address is in the allowed list
 int is_ip_allowed(const char *ip) {
     for (int i = 0; allowed_ips[i] != NULL; i++) {
         if (strcmp(ip, allowed_ips[i]) == 0) {
-            return 1; // allowed
+            return 1;
         }
     }
-    return 0; // not allowed
+    return 0;
 }
 
 void handle_sigint(int sig) {
@@ -78,8 +74,6 @@ int main() {
 
     signal(SIGINT, handle_sigint);
 
-    // Load allowed IPs from file
-    // Change "allowed_ips.txt" to the path of your file
     if (load_ips_from_file("ip.txt") < 0) {
         fprintf(stderr, "Failed to load IP addresses from file.\n");
         exit(EXIT_FAILURE);

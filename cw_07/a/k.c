@@ -4,7 +4,6 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <signal.h>
-#include <errno.h>
 #include <netinet/ip.h>
 #include <netinet/udp.h>
 #include <sys/socket.h>
@@ -14,7 +13,6 @@
 
 int sock = 0;
 
-// Compute checksum for IP/UDP headers
 unsigned short csum(unsigned short *buf, int nwords) {
     unsigned long sum = 0;
     for (; nwords > 0; nwords--) {
@@ -36,13 +34,11 @@ int main() {
     char message[100];
     signal(SIGINT, handle_exit);
 
-    // Create raw socket
     if ((sock = socket(AF_INET, SOCK_RAW, IPPROTO_UDP)) < 0) {
         perror("Socket creation error");
         return -1;
     }
 
-    // Tell the OS we're building the IP header ourselves
     int one = 1;
     if (setsockopt(sock, IPPROTO_IP, IP_HDRINCL, &one, sizeof(one)) < 0) {
         perror("setsockopt error");
@@ -50,13 +46,12 @@ int main() {
         return -1;
     }
 
-    // Enable broadcast if the OS allows it on raw sockets
-    // int broadcastPermission = 1;
-    // if (setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &broadcastPermission, sizeof(broadcastPermission)) < 0) {
-    //     perror("setsockopt(SO_BROADCAST) failed");
-    //     close(sock);
-    //     return -1;
-    // }
+    int broadcastPermission = 1;
+    if (setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &broadcastPermission, sizeof(broadcastPermission)) < 0) {
+        perror("setsockopt(SO_BROADCAST) failed");
+        close(sock);
+        return -1;
+    }
 
     struct sockaddr_in server_address;
     memset(&server_address, 0, sizeof(server_address));
@@ -76,7 +71,6 @@ int main() {
                 message[len - 1] = '\0';
             }
 
-            // Buffer to build the packet
             char packet[BUFFER_SIZE];
             memset(packet, 0, BUFFER_SIZE);
 
@@ -93,35 +87,32 @@ int main() {
 
             // Spoofed source IP
             if (inet_pton(AF_INET, "192.168.1.11", &ip_header->ip_src) <= 0) {
-                printf("\nInvalid fake IP address\n");
+                printf("\nInvalid IP address\n");
                 continue;
             }
 
-            // Destination IP
+            // Server IP
             // ip_header->ip_dst = server_address.sin_addr;
 
-            // Calculate IP checksum
             ip_header->ip_sum = 0;
             ip_header->ip_sum = csum((unsigned short *)packet, sizeof(struct ip) / 2);
 
             // UDP header
             struct udphdr *udp_header = (struct udphdr *)(packet + sizeof(struct ip));
-            udp_header->uh_sport = htons(54321);  // Fake source port
-            udp_header->uh_dport = htons(PORT);  // Destination port
+            udp_header->uh_sport = htons(54321);
+            udp_header->uh_dport = htons(PORT);
             udp_header->uh_ulen = htons(sizeof(struct udphdr) + strlen(message));
-            udp_header->uh_sum = 0;  // UDP checksum (optional, can be 0)
+            udp_header->uh_sum = 0;
 
-            // Copy the message into the packet
             strcpy(packet + sizeof(struct ip) + sizeof(struct udphdr), message);
 
-            // Send the packet
             if (sendto(sock, packet, sizeof(struct ip) + sizeof(struct udphdr) + strlen(message), 0,
                        (struct sockaddr *)&server_address, sizeof(server_address)) < 0) {
-                perror("Error sending packet");
+                perror("Error sending");
                 continue;
             }
 
-            printf("Sent spoofed packet: '%s'\n", message);
+            printf("Sent: '%s'\n", message);
         }
     }
 

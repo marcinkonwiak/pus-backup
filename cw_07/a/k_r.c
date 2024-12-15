@@ -13,10 +13,9 @@
 #define PORT 8080
 #define BUFFER_SIZE 1024
 
-int sock = 0;       // Raw socket for sending
-int sock_recv = 0;  // Normal UDP socket for receiving
+int sock = 0;
+int sock_recv = 0;
 
-// Compute checksum for IP/UDP headers
 unsigned short csum(unsigned short *buf, int nwords) {
     unsigned long sum = 0;
     for (; nwords > 0; nwords--) {
@@ -39,7 +38,7 @@ int main() {
     char message[100];
     signal(SIGINT, handle_exit);
 
-    // Create raw socket for sending
+    // Sending socket
     if ((sock = socket(AF_INET, SOCK_RAW, IPPROTO_UDP)) < 0) {
         perror("Socket creation error");
         return -1;
@@ -52,7 +51,7 @@ int main() {
         return -1;
     }
 
-    // Create a normal UDP socket for receiving responses
+    // Receiving socket
     if ((sock_recv = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
         perror("UDP receive socket creation failed");
         close(sock);
@@ -62,9 +61,10 @@ int main() {
     struct sockaddr_in recv_addr;
     memset(&recv_addr, 0, sizeof(recv_addr));
     recv_addr.sin_family = AF_INET;
-    recv_addr.sin_port = htons(54321); // same as we will use in the UDP header
-    if (inet_pton(AF_INET, "127.0.0.1", &recv_addr.sin_addr) <= 0) {
-        perror("Invalid fake IP address");
+    recv_addr.sin_port = htons(54321);
+
+    if (inet_pton(AF_INET, "127.0.0.12", &recv_addr.sin_addr) <= 0) {
+        perror("Invalid IP address");
         close(sock);
         close(sock_recv);
         return -1;
@@ -89,7 +89,6 @@ int main() {
         return -1;
     }
 
-    // Server address for sending (destination)
     struct sockaddr_in server_address;
     memset(&server_address, 0, sizeof(server_address));
     server_address.sin_family = AF_INET;
@@ -112,8 +111,8 @@ int main() {
 
             // IP header
             struct ip *ip_header = (struct ip *)packet;
-            ip_header->ip_hl = 5;  // Header length
-            ip_header->ip_v = 4;   // IPv4
+            ip_header->ip_hl = 5;
+            ip_header->ip_v = 4;
             ip_header->ip_tos = 0;
             ip_header->ip_len = htons(sizeof(struct ip) + sizeof(struct udphdr) + strlen(message));
             ip_header->ip_id = htonl(54321);
@@ -121,15 +120,14 @@ int main() {
             ip_header->ip_ttl = 64;
             ip_header->ip_p = IPPROTO_UDP;
 
-            // Spoofed source IP (must be something we can receive on, e.g. 127.0.0.1)
+
             if (inet_pton(AF_INET, "127.0.0.1", &ip_header->ip_src) <= 0) {
-                printf("\nInvalid fake IP address\n");
+                printf("\nInvalid IP address\n");
                 continue;
             }
 
             ip_header->ip_dst = server_address.sin_addr;
 
-            // Calculate IP checksum
             ip_header->ip_sum = 0;
             ip_header->ip_sum = csum((unsigned short *)packet, sizeof(struct ip) / 2);
 
@@ -140,10 +138,8 @@ int main() {
             udp_header->uh_ulen = htons(sizeof(struct udphdr) + strlen(message));
             udp_header->uh_sum = 0;  // UDP checksum (optional, can be 0)
 
-            // Copy the message
             strcpy(packet + sizeof(struct ip) + sizeof(struct udphdr), message);
 
-            // Send the packet
             ssize_t sent = sendto(sock, packet, sizeof(struct ip) + sizeof(struct udphdr) + strlen(message), 0,
                                   (struct sockaddr *)&server_address, sizeof(server_address));
             if (sent < 0) {
@@ -153,7 +149,7 @@ int main() {
 
             printf("Sent spoofed packet: '%s'\n", message);
 
-            // Receive the response
+            // response
             memset(buffer, 0, BUFFER_SIZE);
             struct sockaddr_in from_addr;
             socklen_t from_len = sizeof(from_addr);
