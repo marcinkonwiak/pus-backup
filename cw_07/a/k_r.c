@@ -51,6 +51,13 @@ int main() {
         return -1;
     }
 
+    int broadcastPermission = 1;
+    if (setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &broadcastPermission, sizeof(broadcastPermission)) < 0) {
+        perror("setsockopt(SO_BROADCAST) failed");
+        close(sock);
+        return -1;
+    }
+
     // Receiving socket
     if ((sock_recv = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
         perror("UDP receive socket creation failed");
@@ -63,7 +70,7 @@ int main() {
     recv_addr.sin_family = AF_INET;
     recv_addr.sin_port = htons(54321);
 
-    if (inet_pton(AF_INET, "127.0.0.12", &recv_addr.sin_addr) <= 0) {
+    if (inet_pton(AF_INET, "127.0.0.1", &recv_addr.sin_addr) <= 0) {
         perror("Invalid IP address");
         close(sock);
         close(sock_recv);
@@ -93,10 +100,10 @@ int main() {
     memset(&server_address, 0, sizeof(server_address));
     server_address.sin_family = AF_INET;
     server_address.sin_port = htons(PORT);
-    if (inet_pton(AF_INET, "127.0.0.1", &server_address.sin_addr) <= 0) {
-        printf("\nInvalid server address\n");
-        return -1;
-    }
+    // if (inet_pton(AF_INET, "127.0.0.1", &server_address.sin_addr) <= 0) {
+    //     printf("\nInvalid server address\n");
+    //     return -1;
+    // }
 
     while (1) {
         printf("Enter expression (e.g. 1 + 1): ");
@@ -120,7 +127,7 @@ int main() {
             ip_header->ip_ttl = 64;
             ip_header->ip_p = IPPROTO_UDP;
 
-
+            // Client IP
             if (inet_pton(AF_INET, "127.0.0.1", &ip_header->ip_src) <= 0) {
                 printf("\nInvalid IP address\n");
                 continue;
@@ -133,10 +140,10 @@ int main() {
 
             // UDP header
             struct udphdr *udp_header = (struct udphdr *)(packet + sizeof(struct ip));
-            udp_header->uh_sport = htons(54321);  // Fake source port (must match the bind above)
-            udp_header->uh_dport = htons(PORT);    // Destination port
+            udp_header->uh_sport = htons(54321);
+            udp_header->uh_dport = htons(PORT);
             udp_header->uh_ulen = htons(sizeof(struct udphdr) + strlen(message));
-            udp_header->uh_sum = 0;  // UDP checksum (optional, can be 0)
+            udp_header->uh_sum = 0;
 
             strcpy(packet + sizeof(struct ip) + sizeof(struct udphdr), message);
 
