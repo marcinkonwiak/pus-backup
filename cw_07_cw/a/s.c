@@ -13,16 +13,6 @@ int server_fd;
 char *allowed_ips[MAX_IPS + 1];
 int allowed_ip_count = 0;
 
-float calculate(const float num1, const char operator, const float num2) {
-    switch (operator) {
-        case '+': return num1 + num2;
-        case '-': return num1 - num2;
-        case '*': return num1 * num2;
-        case '/': return (num2 != 0) ? num1 / num2 : 0;
-        default: return 0;
-    }
-}
-
 int load_ips_from_file(const char *filename) {
     FILE *fp = fopen(filename, "r");
     if (!fp) {
@@ -84,14 +74,6 @@ int main() {
         exit(EXIT_FAILURE);
     }
 
-    // Enable broadcast option
-    int broadcast = 1;
-    if (setsockopt(server_fd, SOL_SOCKET, SO_BROADCAST, &broadcast, sizeof(broadcast)) < 0) {
-        perror("setsockopt SO_BROADCAST failed");
-        close(server_fd);
-        exit(EXIT_FAILURE);
-    }
-
     int opt = 1;
     if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
         perror("setsockopt SO_REUSEADDR failed");
@@ -101,7 +83,7 @@ int main() {
 
     memset(&address, 0, sizeof(address));
     address.sin_family = AF_INET;
-    address.sin_addr.s_addr = INADDR_ANY; // Bind to all available interfaces
+    address.sin_addr.s_addr = INADDR_ANY;
     address.sin_port = htons(PORT);
 
     if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
@@ -121,24 +103,12 @@ int main() {
             continue;
         }
         const char *client_ip = inet_ntoa(cliaddr.sin_addr);
-        printf("Client IP: %s\n", client_ip);
 
         if (!is_ip_allowed(client_ip)) {
             printf("Received message from disallowed IP: %s\n", client_ip);
             continue;
         }
-
-        float num1, num2;
-        char operator;
-        if (sscanf(buffer, "%f %c %f", &num1, &operator, &num2) == 3) {
-            float result = calculate(num1, operator, num2);
-            snprintf(buffer, BUFFER_SIZE, "%f", result);
-            sendto(server_fd, buffer, strlen(buffer), 0, (struct sockaddr *)&cliaddr, clilen);
-            printf("%f %c %f = %f\n", num1, operator, num2, result);
-        } else {
-            char *err_msg = "Invalid input.";
-            sendto(server_fd, err_msg, strlen(err_msg), 0, (struct sockaddr *)&cliaddr, clilen);
-        }
+        printf("Allowed IP: %s\n", client_ip);
     }
 
     close(server_fd);

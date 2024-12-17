@@ -13,7 +13,6 @@
 
 int sock = 0;
 
-
 void handle_exit(int sig) {
     printf("\nClosing\n");
     close(sock);
@@ -21,8 +20,6 @@ void handle_exit(int sig) {
 }
 
 int main() {
-    char buffer[BUFFER_SIZE];
-    char message[100];
     signal(SIGINT, handle_exit);
 
     if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
@@ -31,7 +28,8 @@ int main() {
     }
 
     int broadcastPermission = 1;
-    if (setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &broadcastPermission, sizeof(broadcastPermission)) < 0) {
+    if (setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &broadcastPermission,
+                   sizeof(broadcastPermission)) < 0) {
         perror("setsockopt(SO_BROADCAST) failed");
         close(sock);
         return -1;
@@ -47,28 +45,21 @@ int main() {
         return -1;
     }
 
-    while (1) {
-        printf("Enter expression (e.g. 1 + 1): ");
-        if (fgets(message, sizeof(message), stdin) != NULL) {
-            size_t len = strlen(message);
-            if (len > 0 && message[len - 1] == '\n') {
-                message[len - 1] = '\0';
-            }
+    char *message = "1";
 
-            char packet[BUFFER_SIZE];
-            memset(packet, 0, BUFFER_SIZE);
+    char packet[BUFFER_SIZE];
+    memset(packet, 0, BUFFER_SIZE);
 
-            strcpy(packet + sizeof(struct ip) + sizeof(struct udphdr), message);
+    strcpy(packet + sizeof(struct ip) + sizeof(struct udphdr), message);
 
-            if (sendto(sock, packet, sizeof(struct ip) + sizeof(struct udphdr) + strlen(message), 0,
-                       (struct sockaddr *)&server_address, sizeof(server_address)) < 0) {
-                perror("Error sending");
-                continue;
-            }
-
-            printf("Sent: '%s'\n", message);
-        }
+    if (sendto(sock, packet,
+               sizeof(struct ip) + sizeof(struct udphdr) + strlen(message), 0,
+               (struct sockaddr *) &server_address, sizeof(server_address)) < 0) {
+        close(sock);
+        return 0;
     }
+
+    printf("Sent: '%s'\n", message);
 
     close(sock);
     return 0;
