@@ -29,13 +29,8 @@ int main() {
         exit(EXIT_FAILURE);
     }
 
-    const char *source_ip = "192.168.1.11";    // Client IP
+    const char *source_ip = "12.13.14.15";    // Client IP
     const char *dest_ip   = "127.0.0.1";  // Server IP
-    
-    if (inet_pton(AF_INET, dest_ip, &sockaddr.sin_addr) <= 0) {
-        printf("\nInvalid address\n");
-        return -1;
-    }
 
     unsigned short source_port = 12345;   // Client port
     unsigned short dest_port = 8085;      // Server port
@@ -96,7 +91,12 @@ int main() {
     struct sockaddr_in sin;
     sin.sin_family = AF_INET;
     sin.sin_port = tcp->dest;
-    sin.sin_addr.s_addr = ip->daddr;
+    // sin.sin_addr.s_addr = ip->daddr;
+
+    if (inet_pton(AF_INET, dest_ip, &sin.sin_addr.s_addr) <= 0) {
+        printf("\nInvalid address\n");
+        return -1;
+    }
 
     if (sendto(sockfd, packet, ntohs(ip->tot_len), 0, (struct sockaddr *)&sin, sizeof(sin)) < 0) {
         perror("sendto");

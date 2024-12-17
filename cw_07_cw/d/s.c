@@ -1,17 +1,13 @@
-#include <netinet/in.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
-#include <signal.h>
-#include <sys/wait.h>
+#include <netinet/ip.h>
+#include <netinet/tcp.h>
 
 #define PORT 8085
 #define BUFFER_SIZE 1024
-
-int server_fd;
-
 #define MAX_IPS 100
 
 char *allowed_ips[MAX_IPS + 1];
@@ -54,62 +50,25 @@ int is_ip_allowed(const char *ip) {
     }
     return 0;
 }
-float calculate(const float num1, const char operator, const float num2) {
-    switch (operator) {
-        case '+': return num1 + num2;
-        case '-': return num1 - num2;
-        case '*': return num1 * num2;
-        case '/': return (num2 != 0) ? num1 / num2 : 0;
-        default: return 0;
-    }
-}
-
-void handle_client(int conn_fd) {
-    char buffer[BUFFER_SIZE] = {0};
-    while (1) {
-        memset(buffer, 0, sizeof(buffer));
-        int valread = read(conn_fd, buffer, BUFFER_SIZE);
-        if (valread <= 0) {
-            break;
-        }
-
-        float num1, num2;
-        char operator;
-        sscanf(buffer, "%f %c %f", &num1, &operator, &num2);
-        float result = calculate(num1, operator, num2);
-
-        snprintf(buffer, BUFFER_SIZE, "%f", result);
-        send(conn_fd, buffer, strlen(buffer), 0);
-    }
-}
-
-void handle_sigint(int sig) {
-    printf("\nClosing server\n");
-    close(server_fd);
-    exit(0);
-}
-
-void sig_chld(int signo) {
-    int stat;
-}
 
 int main() {
-    struct sockaddr_in address;
-    int addrlen = sizeof(address);
-    address.sin_family = AF_INET;
-    address.sin_addr.s_addr = INADDR_ANY;
-    address.sin_port = htons(PORT);
+    int server_fd;
+    char buffer[4096];
+    struct sockaddr_in saddr;
+    socklen_t saddr_len = sizeof(saddr);
 
     if (load_ips_from_file("ip.txt") < 0) {
         fprintf(stderr, "Failed to load IP addresses from file.\n");
         exit(EXIT_FAILURE);
     }
-    char buffer[BUFFER_SIZE] = {0};
-    int conn_fd;
 
-    signal(SIGINT, handle_sigint);
-    if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
-        perror("Socket failed");
+    saddr.sin_family = AF_INET;
+    saddr.sin_addr.s_addr = INADDR_ANY;
+    saddr.sin_port = htons(PORT);
+
+    server_fd = socket(AF_INET, SOCK_RAW, IPPROTO_TCP);
+    if (server_fd < 0) {
+        perror("socket");
         exit(EXIT_FAILURE);
     }
     int opt = 1;
@@ -117,48 +76,52 @@ int main() {
         perror("setsockopt");
         exit(EXIT_FAILURE);
     }
-
-    if (bind(server_fd, (struct sockaddr *) &address, sizeof(address)) < 0) {
+    if (bind(server_fd, (struct sockaddr *) &saddr, sizeof(saddr)) < 0) {
         perror("Bind failed");
         exit(EXIT_FAILURE);
     }
 
-    if (listen(server_fd, 3) < 0) {
-        perror("Listen failed");
-        exit(EXIT_FAILURE);
-    }
-
-    signal(SIGCHLD, sig_chld);
-
-    printf("Server running on port %d...\n", PORT);
+    printf("Server running...\n");
 
     while (1) {
-        if ((conn_fd = accept(server_fd, (struct sockaddr *) &address,
-                              (socklen_t *) &addrlen)) < 0) {
-            perror("Accept failed");
-            exit(EXIT_FAILURE);
-        }
-
-
-        char client_ip[INET_ADDRSTRLEN];
-        inet_ntop(AF_INET, &address.sin_addr, client_ip, INET_ADDRSTRLEN);
-
-        printf("Client IP: %s \n", client_ip);
-
-        if (!is_ip_allowed(client_ip)) {
-            printf("Received message from disallowed IP: %s\n", client_ip);
+        ssize_t bytes = recvfrom(server_fd, buffer, sizeof(buffer), 0,
+                                 (struct sockaddr*)&saddr, &saddr_len);
+        if (bytes < 0) {
+            perror("recvfrom");
             continue;
+        }
+
+        struct iphdr *ip_header = (struct iphdr *)buffer;
+        int ip_header_len = ip_header->ihl * 4;
+        struct tcphdr *tcp_header = (struct tcphdr *)(buffer + ip_header_len);
+
+        if (ntohs(tcp_header->dest) != PORT) {
+            continue;
+        }
+
+        char src_ip[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &ip_header->saddr, src_ip, sizeof(src_ip));
+
+        // printf("Client IP: %s\n", src_ip);
+        // printf("Client Port: %u\n", ntohs(tcp_header->source));
+
+        if (is_ip_allowed(src_ip)) {
+            printf("Allowed %s:%u\n", src_ip, ntohs(tcp_header->source));
         } else {
-            printf("Valid IP\n");
+            printf("Disallowed %s:%u\n", src_ip, ntohs(tcp_header->source));
+            continue;
         }
 
-        if (fork() == 0) {
-            close(server_fd);
-            handle_client(conn_fd);
-            close(conn_fd);
-            exit(0);
+        int tcp_header_len = tcp_header->doff * 4;
+        int payload_len = bytes - (ip_header_len + tcp_header_len);
+        if (payload_len > 0) {
+            char *payload = buffer + ip_header_len + tcp_header_len;
+            printf("Message: %.*s\n", payload_len, payload);
         }
 
-        close(conn_fd);
+        printf("\n");
     }
+
+    close(server_fd);
+    return 0;
 }

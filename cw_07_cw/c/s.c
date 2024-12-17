@@ -148,9 +148,9 @@ int main() {
         if (!is_ip_allowed(client_ip)) {
             printf("Received message from disallowed IP: %s\n", client_ip);
             continue;
-        } else {
-            printf("Valid IP\n");
         }
+        printf("Valid IP\n");
+
 
         if (fork() == 0) {
             close(server_fd);
