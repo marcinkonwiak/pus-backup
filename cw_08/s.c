@@ -92,6 +92,8 @@ int main() {
             continue;
         }
 
+        printf("Client connected.\n");
+
         while (1) {
             char buffer[BUFFER_SIZE];
             memset(buffer, 0, sizeof(buffer));
@@ -118,6 +120,8 @@ int main() {
             int error_flag = 0;
             double result = compute_result(num1, op, num2, &error_flag);
 
+            printf("%.2f %c %.2f = %.2f\n", num1, op, num2, result);
+
             char response[BUFFER_SIZE];
             if (error_flag) {
                 snprintf(response, sizeof(response), "Error: Invalid operation.\n");
@@ -127,6 +131,8 @@ int main() {
 
             write(client_fd, response, strlen(response));
         }
+
+        printf("Client disconnected.\n");
     }
 
     clean_up();
